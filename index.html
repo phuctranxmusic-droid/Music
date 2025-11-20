@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHUCNGUYEN X MUSIC REMIX TV</title>
+<style>
+body {margin:0; padding:0; height:100vh; background:#000; font-family:Arial,sans-serif; color:#fff; overflow:hidden;}
+#mainContent {display:flex; flex-direction:column; align-items:center; justify-content:flex-start; height:100vh; padding-top:50px; position: relative; z-index:5;}
+h1#logo {font-size:3rem; text-align:center; margin-bottom:10px; border:2px solid #fff; padding:8px 30px; border-radius:20px; box-shadow:0 0 20px #ff4b2b,0 0 40px #00f260;}
+#trackInfo {margin-bottom:15px; font-size:18px; color:#0ff; text-shadow:0 0 10px #0ff;}
+/* Nút nhạc */
+#musicButtons {
+    display: flex;
+    flex-direction: column; /* mặc định dọc */
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+    gap: 15px; /* khoảng cách đều */
+}
+
+/* Khi màn hình ngang */
+@media (orientation: landscape) {
+    #musicButtons {
+        flex-direction: row; /* xếp ngang */
+        flex-wrap: nowrap;
+        justify-content: center;
+        align-items: center;
+        gap: 25px; /* khoảng cách cố định */
+    }
+}
+
+#musicButtons button {
+    margin: 0;
+    padding: 12px 30px;
+    font-size: 16px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    background: linear-gradient(45deg,#ff416c,#ff4b2b);
+    color: #fff;
+    font-weight: bold;
+    box-shadow:0 4px 10px rgba(255,75,43,0.5);
+    transition: all 0.3s ease;
+}
+#musicButtons button:hover {transform: scale(1.05); box-shadow:0 6px 18px rgba(255,75,43,0.8);}
+.playing {background:linear-gradient(45deg,#00f260,#0575e6); box-shadow:0 6px 18px rgba(0,242,96,0.8);}
+
+#btnFullscreen{position:fixed;top:20px;right:20px; z-index:10; padding:10px 15px; border-radius:10px; background:#00f; color:#fff; cursor:pointer;}
+#btnYoutube{position:fixed;right:20px; bottom:20px; z-index:10; border-radius:50px; padding:12px 20px; background:linear-gradient(45deg,#FF0000,#FF4500); cursor:pointer;}
+#btnTikTok{position:fixed;left:20px; bottom:20px; z-index:10; border-radius:50px; padding:12px 20px; background:linear-gradient(45deg,#25F4EE,#FF0050); cursor:pointer;}
+#btnShare{position:fixed;left:50%; bottom:20px; transform:translateX(-50%); z-index:10; border-radius:50px; padding:12px 20px; background:linear-gradient(45deg,#00f,#0ff); cursor:pointer;}
+#btnMinimal{position:fixed; top:20px; left:20px; z-index:10; padding:10px 15px; border-radius:10px; background:#ff0; color:#000; cursor:pointer;}
+#btnTheme{position:fixed; top:20px; right:100px; z-index:10; padding:10px 15px; border-radius:10px; background:#0f0; color:#000; cursor:pointer;}
+#volumeControl{margin-top:15px; display:flex; align-items:center; gap:10px; color:#0ff;}
+#volumeSlider{width:150px;}
+canvas{position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none; display:block;}
+</style>
+</head>
+<body>
+
+<div id="mainContent">
+<h1 id="logo">PHUCNGUYEN X MUSIC REMIX</h1>
+<div id="trackInfo">
+<span id="trackName">Chưa phát</span> - <span id="trackTime">0:00 / 0:00</span>
+</div>
+<div id="musicButtons">
+<button id="btnFellDown">FELL DOWN</button>
+<button id="btnTrackMaker">TRACKMAKER</button>
+<button id="btnDJBar">DJ BAR</button>
+<button id="btnFullJ97">FULL J97</button>
+<button id="btnPhonk">PHONK</button>
+<button id="btnTroii">TRÔIIIIII</button>
+</div>
+<div id="volumeControl">
+<label for="volumeSlider">Volume:</label>
+<input type="range" id="volumeSlider" min="0" max="100" value="50">
+<span id="volumeValue">50%</span>
+</div>
+</div>
+
+<button id="btnFullscreen">Full Screen</button>
+<button id="btnYoutube">YOUTUBE</button>
+<button id="btnTikTok">TIKTOK</button>
+<button id="btnShare">SHARE</button>
+<button id="btnMinimal">Minimal</button>
+<button id="btnTheme">Theme</button>
+
+<canvas id="waveCanvas"></canvas>
+
+<script>
+// ===== TRACKS & BUTTONS =====
+const tracks=[
+{name:'FELL DOWN',url:'https://files.catbox.moe/q1ayew.mp3'},
+{name:'TRACKMAKER',url:'https://files.catbox.moe/h40ruv.mp3'},
+{name:'DJ BAR',url:'https://files.catbox.moe/2exit9.mp3'},
+{name:'FULL J97',url:'https://files.catbox.moe/7xsp68.mp3'},
+{name:'PHONK',url:'https://files.catbox.moe/4ua8l7.mp3'},
+{name:'TRÔIIIIII',url:'https://files.catbox.moe/0t4erd.mp3'}];
+
+const buttons=[
+document.getElementById('btnFellDown'),
+document.getElementById('btnTrackMaker'),
+document.getElementById('btnDJBar'),
+document.getElementById('btnFullJ97'),
+document.getElementById('btnPhonk'),
+document.getElementById('btnTroii')];
+
+const trackNameEl=document.getElementById("trackName");
+const trackTimeEl=document.getElementById("trackTime");
+const logo=document.getElementById("logo");
+const volumeSlider=document.getElementById("volumeSlider");
+const volumeValue=document.getElementById("volumeValue");
+
+// ===== AUDIO CONTEXT + GAIN + ANALYSER =====
+let audioCtx, analyser, gainNode, bufferLength, dataArray, currentAudio=null;
+
+function initAudio(){
+if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+if(!analyser){
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=512;
+    bufferLength=analyser.frequencyBinCount;
+    dataArray=new Uint8Array(bufferLength);
+}
+if(!gainNode){gainNode=audioCtx.createGain(); gainNode.gain.value=volumeSlider.value/100;}
+}
+
+// ===== PLAY TRACK =====
+function playTrack(i){
+initAudio();
+if(currentAudio) currentAudio.pause();
+
+currentAudio=new Audio(tracks[i].url);
+currentAudio.crossOrigin="anonymous";
+
+const source=audioCtx.createMediaElementSource(currentAudio);
+source.connect(gainNode);
+gainNode.connect(analyser);
+analyser.connect(audioCtx.destination);
+
+currentAudio.play().catch(()=>audioCtx.resume().then(()=>currentAudio.play()));
+
+buttons.forEach(b=>b.classList.remove("playing"));
+buttons[i].classList.add("playing");
+trackNameEl.textContent=tracks[i].name;
+
+currentAudio.addEventListener('timeupdate', ()=>{
+const curMin=Math.floor(currentAudio.currentTime/60);
+const curSec=Math.floor(currentAudio.currentTime%60).toString().padStart(2,'0');
+const durMin=Math.floor(currentAudio.duration/60)||0;
+const durSec=Math.floor(currentAudio.duration%60).toString().padStart(2,'0')||'00';
+trackTimeEl.textContent=`${curMin}:${curSec} / ${durMin}:${durSec}`;
+});
+
+currentAudio.addEventListener('ended', ()=>{
+playTrack((i+1)%tracks.length);
+});
+}
+buttons.forEach((b,i)=>b.addEventListener('click',()=>playTrack(i)));
+
+// ===== VOLUME CONTROL =====
+volumeSlider.addEventListener("input", ()=>{
+const val=volumeSlider.value;
+volumeValue.textContent=val+"%";
+if(gainNode) gainNode.gain.value=val/100;
+});
+
+// ===== CANVAS & VISUALIZER =====
+const canvas=document.getElementById("waveCanvas");
+const ctx=canvas.getContext("2d");
+canvas.width=window.innerWidth; canvas.height=window.innerHeight;
+
+// Sóng băng nền
+const waveLayers=[];
+for(let i=0;i<5;i++){
+    waveLayers.push({
+        offset:Math.random()*1000,
+        amplitude:20+Math.random()*50,
+        speed:0.01+Math.random()*0.02,
+        color:`hsla(${Math.random()*360},100%,60%,0.2)`
+    });
+}
+
+function drawVisualizer(){
+requestAnimationFrame(drawVisualizer);
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+// Gradient background
+const bgGrad=ctx.createLinearGradient(0,0,0,canvas.height);
+bgGrad.addColorStop(0,"#000");
+bgGrad.addColorStop(1,"#050505");
+ctx.fillStyle=bgGrad;
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+// Sóng băng nền
+waveLayers.forEach(layer=>{
+ctx.beginPath();
+ctx.moveTo(0,canvas.height/2);
+for(let x=0;x<canvas.width;x+=3){
+const y=canvas.height/2 + Math.sin(x*0.02+layer.offset)*layer.amplitude;
+ctx.lineTo(x,y);
+}
+ctx.strokeStyle=layer.color;
+ctx.lineWidth=2;
+ctx.shadowBlur=15;
+ctx.shadowColor=layer.color;
+ctx.stroke();
+layer.offset+=layer.speed;
+});
+
+// Sóng âm bar
+let bass=0;
+if(analyser){
+analyser.getByteFrequencyData(dataArray);
+const barWidth=canvas.width/bufferLength*2;
+let x=0;
+for(let i=0;i<bufferLength;i++){
+const v=dataArray[i]/255;
+const barHeight=v*canvas.height*0.5;
+ctx.fillStyle=`hsl(${i*4},100%,50%)`;
+ctx.fillRect(x,canvas.height-barHeight,barWidth,barHeight);
+x+=barWidth+1;
+bass+=i<10?dataArray[i]:0;
+}
+}
+const hue=Math.floor(bass/bufferLength*8);
+logo.style.color=`hsl(${hue},100%,70%)`;
+}
+drawVisualizer();
+
+// ===== FULLSCREEN =====
+document.getElementById("btnFullscreen").addEventListener("click", ()=>{
+if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+else document.exitFullscreen();
+});
+
+// ===== LINKS =====
+document.getElementById("btnShare").addEventListener("click", ()=>prompt("Copy link:", window.location.href));
+document.getElementById("btnYoutube").addEventListener("click", ()=>window.open("https://youtube.com/@hackrobloxhay","_blank"));
+document.getElementById("btnTikTok").addEventListener("click", ()=>window.open("https://tiktok.com/@chiuemroi2007","_blank"));
+
+// ===== MINIMAL MODE =====
+const btnMinimal = document.getElementById("btnMinimal");
+let minimalMode = false;
+btnMinimal.addEventListener("click", ()=>{
+minimalMode = !minimalMode;
+const mainContent=document.getElementById("mainContent");
+const controls=[document.getElementById("btnFullscreen"),
+                document.getElementById("btnYoutube"),
+                document.getElementById("btnTikTok"),
+                document.getElementById("btnShare"),
+                document.getElementById("btnTheme")];
+if(minimalMode){
+    mainContent.style.display="none";
+    controls.forEach(c=>c.style.display="none");
+    btnMinimal.textContent="Normal";
+} else {
+    mainContent.style.display="flex";
+    controls.forEach(c=>c.style.display="block");
+    btnMinimal.textContent="Minimal";
+}
+});
+
+// ===== THEME NEON =====
+const btnTheme=document.getElementById("btnTheme");
+const themes = [
+    {bgGradient:['#000','#050505'], waveColors:['hsla(0,100%,60%,0.2)','hsla(30,100%,60%,0.2)','hsla(60,100%,60%,0.2)','hsla(90,100%,60%,0.2)','hsla(120,100%,60%,0.2)']},
+    {bgGradient:['#050005','#100010'], waveColors:['hsla(200,100%,60%,0.2)','hsla(230,100%,60%,0.2)','hsla(260,100%,60%,0.2)','hsla(290,100%,60%,0.2)','hsla(320,100%,60%,0.2)']},
+    {bgGradient:['#001000','#002000'], waveColors:['hsla(140,100%,60%,0.2)','hsla(160,100%,60%,0.2)','hsla(180,100%,60%,0.2)','hsla(200,100%,60%,0.2)','hsla(220,100%,60%,0.2)']},
+    {bgGradient:['#000010','#000030'], waveColors:['hsla(250,100%,60%,0.2)','hsla(270,100%,60%,0.2)','hsla(290,100%,60%,0.2)','hsla(310,100%,60%,0.2)','hsla(330,100%,60%,0.2)']}
+];
+let currentTheme = parseInt(localStorage.getItem('themeIndex')) || 0;
+
+function applyTheme(index){
+    const t = themes[index];
+    waveLayers.forEach((layer,i)=>layer.color=t.waveColors[i]);
+    canvas.style.background='linear-gradient(180deg,'+t.bgGradient[0]+','+t.bgGradient[1]+')';
+    localStorage.setItem('themeIndex', index);
+}
+
+btnTheme.addEventListener('click', ()=>{
+    currentTheme = (currentTheme + 1) % themes.length;
+    applyTheme(currentTheme);
+});
+
+// Áp dụng theme khi load
+applyTheme(currentTheme);
+
+// ===== RESIZE =====
+window.addEventListener("resize", ()=>{canvas.width=window.innerWidth; canvas.height=window.innerHeight;});
+</script>
+</body>
+</html>
